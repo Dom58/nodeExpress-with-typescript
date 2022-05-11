@@ -41,3 +41,12 @@
     }
     }
 </code>
+
+## Run dev project will create a ``dist`` folder
+``npm run dev``
+
+## Build project will update a ``dist`` folder
+``npm run build``
+
+## Run production project create a ``dist`` folder
+``npm run start``
