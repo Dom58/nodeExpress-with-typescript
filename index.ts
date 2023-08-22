@@ -1,23 +1,23 @@
 import express, { Express, Request, Response } from 'express';
 import dotenv from 'dotenv';
 import cors from "cors";
-import helmet from "helmet";
-import bodyParser from 'body-parser';
+import cookieParser from 'cookie-parser';
 
 dotenv.config();
 
-const port = process.env.PORT;
+const port = process.env.PORT || 8000;
 
 const app: Express = express();
 app.use(cors());
 
 export interface Items {
   item: {
-  id: number
-  name: string;
-  price: number;
-  description: string;
-  image: string;}[]
+    id: number
+    name: string;
+    price: number;
+    description: string;
+    image: string;
+  }[]
 }
 
 export interface Item {
@@ -34,11 +34,16 @@ interface Id {
 
 const items: Items["item"] = [];
 
-// app.use(helmet());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
+app.use(express.urlencoded());
 app.use(express.json());
+app.use(cookieParser());
 
+const url = process.env.THIRD_PART_API || 'http://localhost:4000/api/cdn/v1/profile';
+const payload = {
+  platform: "web",
+  websiteId: "BPW-123",
+  campaign: "",
+};
 
 app.get('/', (req: Request, res: Response) => {
   res.json({
@@ -47,46 +52,57 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
-app.post("/create", async (req: Request, res: Response) => {
-  try {
-    const item: Item = req.body;
-    items.push(item);
-    res.status(201).json({data: items});
-  } catch (e: any) {
-    res.json(req.body);
-  }
+app.post("/profile", async (req: Request, res: Response) => {
+  fetch(url, {
+    method: "POST",
+    mode: "no-cors",
+    headers: {
+      "Content-Type": "application/json",
+      'Access-Control-Allow-Credentials': 'true'
+    },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      // Set the booletteProof User as an HTTP-only cookie to be used on the server side
+      res.cookie('bp_user', data.userId, { httpOnly: true });
+      res.status(201).json({ message: 'UserId saved to the cookie', data });
+    })
+    .catch((error) => {
+      console.error("Error creating user:", error);
+    });
 });
 
-app.get("/items/:id", async (req: Request, res: Response) => {  
-  try {
-    const id: Id['id'] = parseInt(req.params.id);
-    const findItem = items.find(itm => itm.id === id);
-    if(!findItem) {
-      return res.json({error: 'No  data'})
-    }
-    return res.json(findItem);
-  } catch (e: any) {
-    res.json({error: e});
+app.get("/cookie/check-user", async (req: Request, res: Response) => {
+  // Verify the user from the request cookie
+  const bp_user_cookied = req.cookies?.bp_user;
+  if (!bp_user_cookied) {
+    // 1. return res.status(401).json({ error: 'Unauthorized: User not exist in the cookie' });
+    // 2. set bg_user_2 if not exist
+    fetch(url, {
+      method: "POST",
+      mode: "no-cors",
+      headers: {
+        "Content-Type": "application/json",
+        'Access-Control-Allow-Credentials': 'true'
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        // Set the booletteProof User as an HTTP-only cookie to be used on the server side
+        res.cookie('bp_user', data.userId, { httpOnly: true });
+        res.status(201).json({ message: 'UserId saved to the cookie', data });
+      })
+      .catch((error) => {
+        console.error("Error creating user:", error);
+      });
+  } else {
+    res.status(200).json({ message: 'User retrieved from the cookie', userId: bp_user_cookied });
   }
 });
-
-app.delete("/items/:id", async (req: Request, res: Response) => {  
-  try {
-    const id: Id['id'] = parseInt(req.params.id);
-    
-    const findItem = items.find(itm => itm.id === id);
-    if(!findItem) {
-      return res.json({error: 'No data'})
-    }
-
-    delete items[findItem.id];
-
-    return res.json({"message": 'Item deleted successfully',});
-  } catch (e: any) {
-    res.json({error: e});
-  }
-});
-
 
 // Error handling to catch 404
 app.all('*', (_req, res) => {
